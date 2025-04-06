@@ -39,14 +39,15 @@ class GPUInfo():
     def get_mem_size(self):
         return self.mem
 
+
 # A800
 A800_PREFILL = GPUInfo(name="A800", sm=108, comm_sm=10,
-                      fp16_flops=499.2, fp8_flops=499.2, # not support fp8
-                      mem=80, mem_bw=2*1024,
-                      nvlink_bw=200, pcie_bw=50,
-                      discount_rate=0.85)
+                       fp16_flops=499.2, fp8_flops=499.2,  # not support fp8
+                       mem=80, mem_bw=2*1024,
+                       nvlink_bw=200, pcie_bw=50,
+                       discount_rate=0.85)
 A800_DECODE = GPUInfo(name="A800", sm=108, comm_sm=0,
-                      fp16_flops=499.2, fp8_flops=499.2, # not support fp8
+                      fp16_flops=499.2, fp8_flops=499.2,  # not support fp8
                       mem=80, mem_bw=2*1024,
                       nvlink_bw=200, pcie_bw=50,
                       discount_rate=0.85)
@@ -121,22 +122,36 @@ def get_gpu_info(gpu_type: str, disaggregation_mode: DisaggregationMode) -> GPUI
 
 
 class ServerArgs():
-    def __init__(self, args: argparse.Namespace):
-        self.tp = args.tp
-        self.dp = args.dp
-        self.pp = args.pp
-        self.ep = args.ep
-        self.world_size = self.tp * self.dp * self.pp
-        self.nnodes = args.nnodes
-        self.batch_size = args.batch_size_per_device
-        self.input_seq_len = args.input_seq_len  # ISL
-        self.output_seq_len = args.output_seq_len  # OSL
-        self.kv_cache_hit_rate = args.kv_cache_hit_rate
-        self.dispatch_node = args.dispatch_node
-        self.overlap = args.overlap
+    def __init__(self,
+                 tp: int,
+                 dp: int,
+                 pp: int,
+                 ep: int,
+                 nnodes: int,
+                 batch_size_per_device: int,
+                 input_seq_len: int,
+                 output_seq_len: int,
+                 kv_cache_hit_rate: float,
+                 dispatch_node: int,
+                 overlap: bool,
+                 disaggregation_mode: DisaggregationMode,
+                 mem_fraction_static: float,
+                 ):
+        self.tp = tp
+        self.dp = dp
+        self.pp = pp
+        self.ep = ep
+        self.nnodes = nnodes
+        self.world_size = tp * dp * pp
+        self.batch_size = batch_size_per_device
+        self.input_seq_len = input_seq_len  # ISL
+        self.output_seq_len = output_seq_len  # OSL
+        self.kv_cache_hit_rate = kv_cache_hit_rate
+        self.dispatch_node = dispatch_node
+        self.overlap = overlap
         self.disaggregation_mode: DisaggregationMode = DisaggregationMode(
-            args.disaggregation_mode)
-        self.mem_fraction_static = args.mem_fraction_static
+            disaggregation_mode)
+        self.mem_fraction_static = mem_fraction_static
 
         assert self.world_size % 8 == 0, f"world_size must be divisible by 8, but got {self.world_size}"
 
@@ -158,13 +173,13 @@ class ServerArgs():
 
     def is_prefill_mode(self):
         return self.disaggregation_mode == DisaggregationMode.PREFILL
-
-
+    
 class Throughput():
-    def __init__(self, gpu_info: GPUInfo, args: ServerArgs, throughput: float, detail: dict[str, float]):
+    def __init__(self, gpu_info: GPUInfo, args: ServerArgs, throughput: float, elapse_time: float, detail: dict[str, float]):
         self.gpu_info = gpu_info
         self.args = args
         self.throughput = throughput
+        self.elapse_time = elapse_time
         self.detail = detail
 
     def get_gpu_info(self):
@@ -175,6 +190,9 @@ class Throughput():
 
     def get_throughput(self):
         return self.throughput
+
+    def get_elapse_time(self):
+        return self.elapse_time
 
     def get_detail(self):
         return self.detail
