@@ -74,3 +74,39 @@ python throughput_analysis.py --disaggregation-mode decode --output-seq-len 512
 ```bash
 python throughput_analysis.py --overlap
 ```
+
+### Automatic Parallelism Strategy Tuning
+
+The repository provides an `autotune.py` script that automatically evaluates different tensor parallelism configurations (TP=1,2,4,8) and finds the optimal setup for your workload:
+
+```bash
+# Basic autotune usage with default parameters
+python autotune.py
+
+# Testing different TP configurations on multiple GPU types
+python autotune.py --gpu-type H800 H20 --nnodes 2
+
+# Autotuning for decode mode with custom TPOT threshold
+python autotune.py --disaggregation-mode decode --tpot-threshold 50
+```
+
+This will output a comparison table of different parallelism strategies with their corresponding throughput metrics, making it easy to identify the most efficient configuration for your specific hardware and model deployment.
+
+Key parameters for autotune:
+- `--nnodes`: Number of nodes to simulate (each with 8 GPUs)
+- `--tpot-threshold`: Maximum token generation latency in ms (decode mode only)
+- `--gpu-type`: GPU types to analyze (supports multiple)
+- `--disaggregation-mode`: Mode to analyze (prefill or decode)
+
+Sample output:
+```
+|                   | H800 | H800    | H800   | H800   |
+|:------------------|:-----|:--------|:-------|:-------|
+| TP                | 1    | 2       | 4      | 8      |
+| DP                | 32   | 16      | 8      | 4      |
+| EP                | 32   | 32      | 32     | 32     |
+| DenseMLA          | 0.123| 0.118   | 0.107  | 0.098  |
+| DenseMLP          | 0.456| 0.438   | 0.398  | 0.365  |
+| ... (other metrics) ... |
+| Throughput(tok/s) | 2580 | 2685    | 2950   | 2820   |
+```

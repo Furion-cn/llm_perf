@@ -203,13 +203,13 @@ class Model:
                 gpu_info, args)
             elapse_time = self.get_prefill_elapse_time_sum(
                 gpu_info, args)
-            device_max_bs = self.get_max_bs(gpu=gpu_info, args=args)
             throughputs.append(Throughput(
                 gpu_info,
                 args,
                 args.dp * args.input_seq_len * 1000 / elapse_time / args.get_nnodes(),
+                elapse_time,
                 {
-                    "MaxBatchSize": device_max_bs,
+                    "MaxBatchSize": self.get_max_bs(gpu=gpu_info, args=args),
                     "DenseMLA(ms)": dense_mla,
                     "DenseMLP(ms)": dense_mlp,
                     "TP_MLA(ms)": tp_mla,
@@ -227,14 +227,14 @@ class Model:
         for gpu_info in gpu_info_list:
             dense_mla, dense_mlp, tp_mla, kv_cache_load_time, shared, routed, dispatch, combine = self.get_decode_elapse_time(
                 gpu_info, args)
-            elapse_time = self.get_decode_elapse_time_sum(gpu_info, args)
             device_max_bs = self.get_max_bs(gpu=gpu_info, args=args)
-            max_bs = self.get_max_bs(gpu=gpu_info, args=args)
-            batch_size = args.batch_size if args.batch_size <= max_bs else max_bs
+            args.batch_size = args.batch_size if args.batch_size <= device_max_bs else device_max_bs
+            elapse_time = self.get_decode_elapse_time_sum(gpu_info, args)
             throughputs.append(Throughput(
                 gpu_info,
                 args,
-                1000 / elapse_time * batch_size,
+                1000 / elapse_time * args.batch_size,
+                elapse_time,
                 {
                     "MaxBatchSize": device_max_bs,
                     "DenseMLA(ms)": dense_mla,
