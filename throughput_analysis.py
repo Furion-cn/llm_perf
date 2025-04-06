@@ -13,7 +13,7 @@ if __name__ == "__main__":
     parser.add_argument("--pp", type=int, default=1)
     parser.add_argument("--ep", type=int, default=32)
     parser.add_argument("--nnodes", type=int, default=0)
-    parser.add_argument("--batch-size-per-device", type=int, default=1)
+    parser.add_argument("--batch-size", type=int, default=1)
     parser.add_argument("--input-seq-len", type=int, default=4383)
     parser.add_argument("--output-seq-len", type=int, default=1210)
     parser.add_argument("--kv-cache-hit-rate", type=float, default=0.563)
@@ -25,7 +25,21 @@ if __name__ == "__main__":
     parser.add_argument("--mem-fraction-static", type=float, default=0.9)
 
     args = parser.parse_args()
-    server_args = ServerArgs(args)
+    server_args = ServerArgs(
+        tp=args.tp,
+        dp=args.dp,
+        pp=args.pp,
+        ep=args.ep,
+        nnodes=args.nnodes,
+        batch_size=args.batch_size,
+        input_seq_len=args.input_seq_len,
+        output_seq_len=args.output_seq_len,
+        kv_cache_hit_rate=args.kv_cache_hit_rate,
+        dispatch_node=args.dispatch_node,
+        overlap=args.overlap,
+        disaggregation_mode=args.disaggregation_mode,
+        mem_fraction_static=args.mem_fraction_static
+    )
 
     gpu_info_list = []
     for gpu_type in args.gpu_type:
@@ -35,7 +49,10 @@ if __name__ == "__main__":
     m = Model()
 
     # m.print_prefill_time_sum(gpu_info_list, server_args)
-    throughputs = m.get_throughput(gpu_info_list, server_args)
+    throughputs = []
+    for gpu in gpu_info_list:
+        throughput = m.get_throughput(gpu, server_args)
+        throughputs.append(throughput)
     detail_keys = list(throughputs[0].get_detail().keys())
     columns = ["GPU"] + detail_keys + ["Throughput(tok/s)"]
     df = pd.DataFrame(columns=columns)
@@ -54,6 +71,6 @@ if __name__ == "__main__":
 #  TP/DP/PP: {server_args.tp}/{server_args.dp}/{server_args.pp}\n\
 #  EP: {server_args.ep}\n\
 #  KVCacheHitRate: {server_args.kv_cache_hit_rate}"
-    result = f"# { 'Prefill' if server_args.disaggregation_mode == DisaggregationMode.PREFILL else 'Decode'} { '(Overlap)' if server_args.overlap else '' }) 吞吐/单卡: "
+    result = f"# { 'Prefill' if server_args.disaggregation_mode == DisaggregationMode.PREFILL else 'Decode'} { '(Overlap)' if server_args.overlap else '' }) 吞吐: "
     markdown_output = f"{env}\n{result}\n{df.to_markdown(floatfmt='.3f')}"
     print(markdown_output)
