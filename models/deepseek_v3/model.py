@@ -166,18 +166,18 @@ class Model:
                                                                   args.input_seq_len)
         return dense_mla, dense_mlp, tp_mla, shared, routed, dispatch, combine
 
-    def get_decode_elapse_time(self, gpu: GPUInfo, args: ServerArgs):
+    def get_decode_elapse_time(self, gpu: GPUInfo, args: ServerArgs, batch_size: int):
         dense_mla = self.get_decode_mla_elapse_time(
-            gpu, args, 1, args.batch_size)
+            gpu, args, 1, batch_size)
         tp_mla = self.get_decode_mla_elapse_time(
-            gpu, args, args.tp, args.batch_size)
-        kv_cache_load_time = args.batch_size * (args.input_seq_len) * (
+            gpu, args, args.tp, batch_size)
+        kv_cache_load_time = batch_size * (args.input_seq_len) * (
             self.kv_lora_rank + self.qk_rope_head_dim) / 1024/1024/1024 / gpu.get_mem_bw() * 1000
-        dense_mlp = self.get_dense_mlp_elapse_time(gpu, args, args.batch_size)
+        dense_mlp = self.get_dense_mlp_elapse_time(gpu, args, batch_size)
         shared, routed = self.get_moe_expert_elapse_time(
-            gpu, args, args.batch_size)
+            gpu, args, batch_size)
         dispatch, combine = self.get_prefill_alltoall_elapse_time(
-            gpu, args, args.batch_size * self.n_activated_experts)
+            gpu, args, batch_size * self.n_activated_experts)
         return dense_mla, dense_mlp, tp_mla, kv_cache_load_time, shared, routed, dispatch, combine
 
     def get_prefill_elapse_time_sum(self, gpu: GPUInfo, args: ServerArgs):
@@ -188,9 +188,9 @@ class Model:
         else:
             return self.n_dense_layers * (dense_mla + dense_mlp) + (self.n_layers - self.n_dense_layers) * (tp_mla + shared + routed + dispatch + combine)
 
-    def get_decode_elapse_time_sum(self, gpu: GPUInfo, args: ServerArgs):
+    def get_decode_elapse_time_sum(self, gpu: GPUInfo, args: ServerArgs, batch_size: int):
         dense_mla, dense_mlp, tp_mla, kv_cache_load_time, shared, routed, dispatch, combine = self.get_decode_elapse_time(
-            gpu, args)
+            gpu, args, batch_size)
         if args.overlap:
             return self.n_dense_layers * (dense_mla + kv_cache_load_time + dense_mlp) + (self.n_layers - self.n_dense_layers) * (tp_mla + kv_cache_load_time+shared + routed)
         else:
@@ -225,15 +225,15 @@ class Model:
     def get_decode_throughput(self, gpu_info_list: list[GPUInfo], args: ServerArgs) -> list[Throughput]:
         throughputs = []
         for gpu_info in gpu_info_list:
-            dense_mla, dense_mlp, tp_mla, kv_cache_load_time, shared, routed, dispatch, combine = self.get_decode_elapse_time(
-                gpu_info, args)
             device_max_bs = self.get_max_bs(gpu=gpu_info, args=args)
-            args.batch_size = args.batch_size if args.batch_size <= device_max_bs else device_max_bs
-            elapse_time = self.get_decode_elapse_time_sum(gpu_info, args)
+            batch_size = args.batch_size if args.batch_size <= device_max_bs else device_max_bs
+            dense_mla, dense_mlp, tp_mla, kv_cache_load_time, shared, routed, dispatch, combine = self.get_decode_elapse_time(
+                gpu_info, args, batch_size)
+            elapse_time = self.get_decode_elapse_time_sum(gpu_info, args, batch_size)
             throughputs.append(Throughput(
                 gpu_info,
                 args,
-                1000 / elapse_time * args.batch_size,
+                1000 / elapse_time * batch_size,
                 elapse_time,
                 {
                     "MaxBatchSize": device_max_bs,
@@ -303,9 +303,10 @@ class Model:
 
     def get_max_bs(self, gpu: GPUInfo, args: ServerArgs):
         with disaggregation_mode(args):
+            # print(gpu.name,gpu.get_fp8_mem_size())
             kv_cache_size = (args.input_seq_len * (1 - args.kv_cache_hit_rate) +
-                             args.output_seq_len) * (self.kv_lora_rank + self.qk_rope_head_dim) * self.n_layers
-            device_model_size = self.get_device_model_size(args)
+                             args.output_seq_len) * (self.kv_lora_rank + self.qk_rope_head_dim) * self.n_layers * gpu.get_fp8_mem_size()
+            device_model_size = self.get_device_model_size(args) * gpu.get_fp8_mem_size()
             return math.floor((gpu.get_mem_size() * 1024 * 1024 * 1024 * args.mem_fraction_static - device_model_size) / kv_cache_size / args.tp)
 
     def get_throughput(self, gpu_info_list: list[GPUInfo], args: ServerArgs) -> list[Throughput]:

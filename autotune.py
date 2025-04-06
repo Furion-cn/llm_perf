@@ -11,13 +11,13 @@ if __name__ == "__main__":
     parser.add_argument("--output-seq-len", type=int, default=1210)
     parser.add_argument("--kv-cache-hit-rate", type=float, default=0.563)
     parser.add_argument("--dispatch-node", type=int, default=4)
-    parser.add_argument("--overlap", action="store_true", default=True)
+    parser.add_argument("--overlap", action="store_true", default=False)
     parser.add_argument("--gpu-type", type=str, nargs='+', default=["H800"])
     parser.add_argument("--disaggregation-mode", type=str,
                         default="prefill", choices=["prefill", "decode"])
     parser.add_argument("--mem-fraction-static", type=float, default=0.9)
     parser.add_argument("--tpot-threshold", type=int, default=50)
-
+    parser.add_argument("--batch-size-per-device", type=int, default=1000000)
     args = parser.parse_args()
 
     gpu_info_list = []
@@ -32,13 +32,13 @@ if __name__ == "__main__":
     for tp in tp_list:
         server_args = ServerArgs(
             tp, args.nnodes * 8 // tp, 1, args.nnodes * 8,
-            args.nnodes, 1000000, args.input_seq_len, args.output_seq_len,
+            args.nnodes, args.batch_size_per_device, args.input_seq_len, args.output_seq_len,
             args.kv_cache_hit_rate, args.dispatch_node, args.overlap, DisaggregationMode(args.disaggregation_mode), args.mem_fraction_static)
         results = m.get_throughput(gpu_info_list, server_args)
         if DisaggregationMode(args.disaggregation_mode) == DisaggregationMode.DECODE:
             for result in results:
                 if result.get_elapse_time() > args.tpot_threshold:
-                    print(f"TPOT({result.get_elapse_time():.3f}ms) > 50ms, skip gpu={result.get_gpu_info().name} tp={tp}, dp={args.nnodes * 8 // tp}, ep={args.nnodes * 8}, batch_size={result.get_args().batch_size}")
+                    print(f"TPOT({result.get_elapse_time():.3f}ms) > 50ms, skip gpu={result.get_gpu_info().name} tp={tp}, dp={args.nnodes * 8 // tp}, ep={args.nnodes * 8}, batch_size={result.detail['MaxBatchSize']}")
                     continue
                 throughputs.append(result)
         else:

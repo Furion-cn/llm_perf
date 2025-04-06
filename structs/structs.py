@@ -25,7 +25,17 @@ class GPUInfo():
         return self.fp16_flops * self.discount_rate * (self.sm - self.comm_sm) / self.sm
 
     def get_fp8_flops(self):
+        if self.fp8_flops <= 0:  # not support fp8
+            return self.get_fp16_flops() 
         return self.fp8_flops * self.discount_rate * (self.sm - self.comm_sm) / self.sm
+    
+    def get_fp16_mem_size(self):
+        return 2
+    
+    def get_fp8_mem_size(self):
+        if self.fp8_flops <= 0:  # not support fp8
+            return self.get_fp16_mem_size()
+        return 1
 
     def get_mem_bw(self):
         return self.mem_bw * self.discount_rate
@@ -42,12 +52,12 @@ class GPUInfo():
 
 # A800
 A800_PREFILL = GPUInfo(name="A800", sm=108, comm_sm=10,
-                       fp16_flops=499.2, fp8_flops=499.2,  # not support fp8
+                       fp16_flops=499.2, fp8_flops=0,  # not support fp8
                        mem=80, mem_bw=2*1024,
                        nvlink_bw=200, pcie_bw=50,
                        discount_rate=0.85)
 A800_DECODE = GPUInfo(name="A800", sm=108, comm_sm=0,
-                      fp16_flops=499.2, fp8_flops=499.2,  # not support fp8
+                      fp16_flops=499.2, fp8_flops=0,  # not support fp8
                       mem=80, mem_bw=2*1024,
                       nvlink_bw=200, pcie_bw=50,
                       discount_rate=0.85)

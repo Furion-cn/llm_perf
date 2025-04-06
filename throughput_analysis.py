@@ -25,7 +25,21 @@ if __name__ == "__main__":
     parser.add_argument("--mem-fraction-static", type=float, default=0.9)
 
     args = parser.parse_args()
-    server_args = ServerArgs(args)
+    server_args = ServerArgs(
+        tp=args.tp,
+        dp=args.dp,
+        pp=args.pp,
+        ep=args.ep,
+        nnodes=args.nnodes,
+        batch_size_per_device=args.batch_size_per_device,
+        input_seq_len=args.input_seq_len,
+        output_seq_len=args.output_seq_len,
+        kv_cache_hit_rate=args.kv_cache_hit_rate,
+        dispatch_node=args.dispatch_node,
+        overlap=args.overlap,
+        disaggregation_mode=args.disaggregation_mode,
+        mem_fraction_static=args.mem_fraction_static
+    )
 
     gpu_info_list = []
     for gpu_type in args.gpu_type:
