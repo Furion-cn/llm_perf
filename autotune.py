@@ -15,9 +15,9 @@ if __name__ == "__main__":
     parser.add_argument("--gpu-type", type=str, nargs='+', default=["H800"])
     parser.add_argument("--disaggregation-mode", type=str,
                         default="prefill", choices=["prefill", "decode"])
-    parser.add_argument("--mem-fraction-static", type=float, default=0.9)
+    parser.add_argument("--mem-fraction-static", type=float, default=0.92)
     parser.add_argument("--tpot-threshold", type=int, default=50)
-    parser.add_argument("--batch-size-per-device", type=int, default=1000000)
+    parser.add_argument("--batch-size", type=int, default=0)
     args = parser.parse_args()
 
     gpu_info_list = []
@@ -29,26 +29,45 @@ if __name__ == "__main__":
 
     tp_list = [1, 2, 4, 8]
     throughputs = []
-    for tp in tp_list:
-        server_args = ServerArgs(
-            tp, args.nnodes * 8 // tp, 1, args.nnodes * 8,
-            args.nnodes, args.batch_size_per_device, args.input_seq_len, args.output_seq_len,
-            args.kv_cache_hit_rate, args.dispatch_node, args.overlap, DisaggregationMode(args.disaggregation_mode), args.mem_fraction_static)
-        results = m.get_throughput(gpu_info_list, server_args)
-        if DisaggregationMode(args.disaggregation_mode) == DisaggregationMode.DECODE:
-            for result in results:
-                if result.get_elapse_time() > args.tpot_threshold:
-                    print(f"TPOT({result.get_elapse_time():.3f}ms) > 50ms, skip gpu={result.get_gpu_info().name} tp={tp}, dp={args.nnodes * 8 // tp}, ep={args.nnodes * 8}, batch_size={result.detail['MaxBatchSize']}")
-                    continue
-                throughputs.append(result)
-        else:
-            throughputs.extend(results)
+    for gpu in gpu_info_list:
+        for tp in tp_list:
+            if args.batch_size > 0:
+                max_bs = args.batch_size
+            else:
+                max_bs = m.get_max_bs(gpu=gpu, tp=tp, dp=args.nnodes * 8 // tp, ep=args.nnodes * 8, input_seq_len=args.input_seq_len,
+                                      output_seq_len=args.output_seq_len, kv_cache_hit_rate=args.kv_cache_hit_rate, mem_fraction_static=args.mem_fraction_static)
+               
+            if max_bs <= 0:
+                print(
+                    f"No valid batch size found for gpu={gpu.name} tp={tp}, dp={args.nnodes * 8 // tp}, ep={args.nnodes * 8}")
+                continue
+
+            for bs in range(max_bs, 0, -1):
+                server_args = ServerArgs(
+                    tp, args.nnodes * 8 // tp, 1, args.nnodes * 8,
+                    args.nnodes, bs, args.input_seq_len, args.output_seq_len,
+                    args.kv_cache_hit_rate, args.dispatch_node, args.overlap, DisaggregationMode(args.disaggregation_mode), args.mem_fraction_static)
+
+                throughput = m.get_throughput(gpu, server_args)
+
+                if DisaggregationMode(args.disaggregation_mode) == DisaggregationMode.DECODE:
+                    if throughput.get_elapse_time() > args.tpot_threshold:
+                        print(
+                            f"TPOT({throughput.get_elapse_time():.3f}ms) > 50ms, skip gpu={throughput.get_gpu_info().name} tp={tp}, dp={args.nnodes * 8 // tp}, ep={args.nnodes * 8}, batch_size={throughput.detail['BatchSize']}")
+                        continue
+                throughputs.append(throughput)
+                break
+
+    if len(throughputs) == 0:
+        print("There is no valid throughputs under the current conditions")
+        exit(1)
 
     # sort by gpu and throughput
     throughputs.sort(key=lambda x: (x.get_gpu_info().name, x.get_throughput()))
 
     detail_keys = list(throughputs[0].get_detail().keys())
-    columns = ["GPU", "TP", "DP", "EP"] + detail_keys + ["Throughput(tok/s)"]
+    columns = ["GPU", "TP", "DP", "EP"] + detail_keys + \
+        ["ThroughputPerNode(tok/s)"] + ["Throughput(tok/s)"]
     df = pd.DataFrame(columns=columns)
     for throughput in throughputs:
         detail = throughput.get_detail()
@@ -59,8 +78,9 @@ if __name__ == "__main__":
         row.append(args.ep)
         for key in detail_keys:
             row.append(detail[key])
+        row.append(throughput.get_throughput() / args.nnodes)
         row.append(throughput.get_throughput())
         df.loc[len(df)] = row
-    
+
     df = df.set_index('GPU').T
     print(df.to_markdown(floatfmt='.3f'))
