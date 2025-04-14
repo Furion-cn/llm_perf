@@ -41,7 +41,7 @@ Running the tool produces a detailed analysis of model performance, including:
 #  EP: 1
 #  KVCacheHitRate: 0.563
 
-# Prefill 吞吐/单卡: 
+# Prefill 吞吐: 
 
 |                 | H800     |
 |:----------------|:---------|
