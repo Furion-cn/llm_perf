@@ -154,7 +154,8 @@ class Model:
         comm_bw = gpu.get_pcie_bw(op=AllToAll(ep))
         dispatch_time = dispatch_size / comm_bw
         combine_time = combine_size / comm_bw
-        return dispatch_time, combine_time
+        static_latency = 0.020
+        return dispatch_time + static_latency, combine_time + static_latency
 
     def get_kv_cache_load_time(self, gpu: GPUInfo, dp: int, bs: int, seq_len: int):
         return bs/dp * seq_len * (
@@ -329,7 +330,7 @@ class Model:
                    kv_cache_hit_rate: float,
                    mem_fraction_static: float):
         dtype_mem_size = 1 if gpu.support_dtype(DType.FP8) else 2
-        return math.floor((gpu.get_mem_size() * 1024 * 1024 * 1024 * mem_fraction_static - self.get_device_model_size(tp, ep) * dtype_mem_size) / (self.get_kv_cache_size(input_seq_len, output_seq_len, kv_cache_hit_rate) * dtype_mem_size) * dp)
+        return math.floor((gpu.get_mem_size() * 1024 * 1024 * 1024 * mem_fraction_static - self.get_device_model_size(tp, ep) * dtype_mem_size ) / (self.get_kv_cache_size(input_seq_len, output_seq_len, kv_cache_hit_rate) * 2) * dp)
 
     def get_throughput(self, gpu: GPUInfo, args: ServerArgs) -> Throughput:
         if args.disaggregation_mode == DisaggregationMode.PREFILL:
