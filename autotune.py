@@ -52,8 +52,8 @@ if __name__ == "__main__":
 
                 if DisaggregationMode(args.disaggregation_mode) == DisaggregationMode.DECODE:
                     if throughput.get_elapse_time() > args.tpot_threshold:
-                        print(
-                            f"TPOT({throughput.get_elapse_time():.3f}ms) > 50ms, skip gpu={throughput.get_gpu_info().name} tp={tp}, dp={args.nnodes * 8 // tp}, ep={args.nnodes * 8}, batch_size={throughput.detail['BatchSize']}")
+                        # print(
+                        #     f"TPOT({throughput.get_elapse_time():.3f}ms) > 50ms, skip gpu={throughput.get_gpu_info().name} tp={tp}, dp={args.nnodes * 8 // tp}, ep={args.nnodes * 8}, batch_size={throughput.detail['BatchSize']}")
                         continue
                 throughputs.append(throughput)
                 break

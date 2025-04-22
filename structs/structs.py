@@ -160,7 +160,7 @@ class GPUInfo():
         return self.pcie_bw * op.get_discount_rate()
 
     def get_mem_size(self):
-        return self.mem
+        return self.mem - 4 - 1.5 # rdma network buffer and cuda runner cache
 
     def get_nvlink_bw(self, op: Optional[GPUOp] = None):
         if op is None:
@@ -171,13 +171,13 @@ class GPUInfo():
 # A800
 A800_PREFILL = GPUInfo(name="A800", sm=108, comm_sm=10,
                        # not support fp8
-                       flops_map={DType.FP16: 499.2, DType.FP8: 499.2},
+                       flops_map={DType.FP16: 499.2},
                        mem=80, mem_bw=2*1024,
                        nvlink_bw=200, pcie_bw=50,
                        discount_rate=0.78)
 A800_DECODE = GPUInfo(name="A800", sm=108, comm_sm=0,
                       # not support fp8
-                      flops_map={DType.FP16: 499.2, DType.FP8: 499.2},
+                      flops_map={DType.FP16: 499.2},
                       mem=80, mem_bw=2*1024,
                       nvlink_bw=200, pcie_bw=50,
                       discount_rate=0.78)
